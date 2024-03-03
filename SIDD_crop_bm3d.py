@@ -15,6 +15,7 @@ import glob
 import random
 
 # bm3d
+sys.path.append('./bm3d-3.0.6')
 sys.path.append('./bm3d-3.0.6/examples')
 from bm3d import bm3d_rgb, BM3DProfile
 from experiment_funcs import get_psnr
@@ -31,7 +32,7 @@ default_cff = 4.0
 default_n1 = 8
 default_cspace = 0
 default_wtransform = 0
-default_neiborhood = 8
+default_neighborhood = 8
 
 def generate_dir():
     file_dir = ['./SIDD_crop_bm3d', './SIDD_crop_bm3d/train', './SIDD_crop_bm3d/test', 
@@ -81,6 +82,7 @@ def generate_red_img(noisy_img, pred_psd, gt_img):
 
     return red_img, cff, profile.bs_ht, cspace, profile.transform_2d_wiener_name, profile.bs_wiener, psnr
 
+
 noisy_dir_list = glob.glob('./SIDD_crop/*_NOISY_SRGB')
 gt_dir_list = glob.glob('./SIDD_crop/*_GT_SRGB')
 noisy_dir_list.sort()
@@ -88,35 +90,53 @@ gt_dir_list.sort()
 
 generate_dir()
 
-for idx in range(1, len(noisy_dir_list)):
+cnt_train = 0
+cnt_test = 0
+
+# for idx in range(1, len(noisy_dir_list)):
+for idx in range(0, len(noisy_dir_list)):
 
     noisy_img_list = glob.glob(noisy_dir_list[idx] + '/*.PNG')
     gt_img_list = glob.glob(gt_dir_list[idx] + '/*.PNG')
     noisy_img_list.sort()
     gt_img_list.sort()
 
-    train_num = int(0.9*len(noisy_img_list))
-    train_idx = random.sample(range(len(noisy_img_list)), train_num)
-
-    cnt_train = 0
-    cnt_test = 0
+    train_num = int(0.9*len(noisy_dir_list))
+    train_idx = random.sample(range(len(noisy_dir_list)), train_num)
 
     for jdx in range(len(noisy_img_list)):
         noisy_img = Image.open(noisy_img_list[jdx])
         gt_img = Image.open(gt_img_list[jdx])
 
+
+        # DebugMK
+        crop_size = 512
+        w, h = noisy_img.size
+        # print(w, h)
+        r = random.randint(0, h-crop_size)
+        c = random.randint(0, w-crop_size)
+        nz_arr = np.array(noisy_img)
+        gt_arr = np.array(gt_img)
+
+        noisy_crop = nz_arr[r:r+crop_size, c:c+crop_size, :]
+        gt_crop = gt_arr[r:r+crop_size, c:c+crop_size, :]
+
+
         # Estimate the noise
-        pred_psd = estimate_the_noise(noisy_img)
+        pred_psd = estimate_the_noise(noisy_crop)
         
         # five parameter: ['cff', 'n1', 'cspace', 'wtransform', 'neighborhood']
         # ['cff', 'bs_ht', 'YCbCr'or'opp', 'transform_2d_wiener_name', 'bs_wiener']
-        red_img, cff, n1, cspace, wtransform, neighborhood, psnr = generate_red_img(noisy_img, pred_psd, gt_img)
+        red_img, cff, n1, cspace, wtransform, neighborhood, psnr = generate_red_img(noisy_crop, pred_psd, gt_crop)
+        
+        noisy_crop_img = Image.fromarray(noisy_crop)
+        gt_crop_img = Image.fromarray(gt_crop)
 
         order = noisy_img_list[jdx].split('/')[-2].split('_')[0]
 
-        if jdx in train_idx:
-            noisy_img.save('./SIDD_crop_bm3d/train/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            gt_img.save('./SIDD_crop_bm3d/train/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
+        if idx in train_idx:
+            noisy_crop_img.save('./SIDD_crop_bm3d/train/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
+            gt_crop_img.save('./SIDD_crop_bm3d/train/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
             red_img.save('./SIDD_crop_bm3d/train/RED/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
             with open('./SIDD_crop_bm3d/train/PARAM/{}_SRGB/{:03d}.txt'.format(order, cnt_train), 'w') as f:
                 f.write('{}\n'.format(cff))
@@ -129,8 +149,8 @@ for idx in range(1, len(noisy_dir_list)):
             cnt_train += 1
 
         else:
-            noisy_img.save('./SIDD_crop_bm3d/test/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            gt_img.save('./SIDD_crop_bm3d/test/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
+            noisy_crop_img.save('./SIDD_crop_bm3d/test/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
+            gt_crop_img.save('./SIDD_crop_bm3d/test/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
             red_img.save('./SIDD_crop_bm3d/test/RED/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
             with open('./SIDD_crop_bm3d/test/PARAM/{}_SRGB/{:03d}.txt'.format(order, cnt_train), 'w') as f:
                 f.write('{}\n'.format(cff))
@@ -141,3 +161,8 @@ for idx in range(1, len(noisy_dir_list)):
                 f.write('{}\n'.format(psnr))
             f.close()
             cnt_test += 1
+
+        print(cnt_train, cnt_test)
+
+
+print(cnt_train, cnt_test)

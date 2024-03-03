@@ -21,12 +21,14 @@ def train_step1():
     LR = 0.003
 
     viz = visdom.Visdom(env='step1')
-    image_dir = '/home/tongtong/project/raw_camera/ISPNetv3/SIDD_crop_bm3d'
+    image_dir = './SIDD_crop_bm3d'
     train_loader = train_dataloader(image_dir, batch_size=5, num_threads=16, img_size=512)
     test_loader = test_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     train_loader2 = train_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=1, img_size=512)
     net = torch.nn.DataParallel(net).cuda()
+
+    # net.load_state_dict(torch.load('./checkpoints_step1_20240101/net_iter265.pth'))
 
     # criterion = torch.nn.L1Loss()
     criterion = torch.nn.MSELoss()
@@ -95,8 +97,14 @@ def train_step1():
         viz.line(X=np.array([epoch]), Y=np.array([float(np.array(psnr_gt_net_list).mean())]), win='psnr_test', update='append' if epoch > 0 else None)
         print('epoch {:03d}, train red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list_train).mean()), float(np.array(psnr_gt_net_list_train).mean())))     
         print('epoch {:03d}, test  red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
+        
+        txt_data = "epoch: " + str(epoch) + "; " + "loss: " + str(train_loss) + "; " + "psnr_train: " + str(float(np.array(psnr_gt_net_list_train).mean())) + "; " + "psnr_test: " + str(float(np.array(psnr_gt_net_list).mean())) + "; " + "\n"
+        
+        file = open("train_step1.txt", "a+")
+        file.write(txt_data)
+        file.close()
 
-        save_path = './checkpoints_step1/net_iter{:03d}.pth'.format(epoch+1)
+        save_path = './checkpoints_step1/net_iter{:03d}.pth'.format(epoch)
         torch.save(net.state_dict(), save_path)
 
         # if float(np.array(psnr_gt_net_list).mean()) > maxx:
@@ -113,14 +121,15 @@ def train_step2():
     LR = 0.002
 
     viz = visdom.Visdom(env='step2')
-    image_dir = '/home/tongtong/project/raw_camera/ISPNetv3/SIDD_crop_bm3d'
+    image_dir = './SIDD_crop_bm3d'
     train_loader = train_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     test_loader = test_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=3, img_size=512)
 
     net = torch.nn.DataParallel(net).cuda()
     # 237 for max_psnr and 459 for min loss
-    net.load_state_dict(torch.load('./checkpoints_step1/net_iter237.pth'))
+    net.load_state_dict(torch.load('./checkpoints_step1/net_iter117.pth'))
+    
 
     criterion = torch.nn.MSELoss()
     # optimizer = torch.optim.Adam([net.module.param_layer], LR)
@@ -224,7 +233,7 @@ def train_step2():
         viz.line(X=np.array([epoch]), Y=np.array([float(np.array(psnr_gt_net_list).mean())]), win='loss1', update='append' if epoch > 0 else None)
         print('epoch {:03d}, red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
 
-        save_path = './checkpoints_step2/net_iter{:03d}.pth'.format(epoch+1)
+        save_path = './checkpoints_step2/net_iter{:03d}.pth'.format(epoch)
         torch.save(net.state_dict(), save_path)
         param_layer_value = net.module.return_param_layer()
 
@@ -234,9 +243,18 @@ def train_step2():
         viz.line(X=np.array([epoch]), Y=np.array([float(res[3])]), win='param4', update='append' if epoch > 0 else None)
         viz.line(X=np.array([epoch]), Y=np.array([float(res[4])]), win='param5', update='append' if epoch > 0 else None)
 
-        f = open('./pickles_step2/param_layer{:03d}.pkl'.format(epoch+1), 'wb')
+        f = open('./pickles_step2/param_layer{:03d}.pkl'.format(epoch), 'wb')
         pickle.dump(param_layer_value, f)
         f.close()
+
+
+        txt_data = "epoch: " + str(epoch) + "; " + "loss: " + str(train_loss) + "; " + "loss1: " + str(float(np.array(psnr_gt_net_list).mean())) + "; " + \
+            "param1: " + str(float(res[0])) + "; " + "param2: " + str(float(res[1])) + "; " + "param3: " + str(float(res[2])) + "; " + "param4: " + str(float(res[3])) + "; " + "param5: " + str(float(res[4])) + "; " + "\n"
+        
+        file = open("train_step2.txt", "a+")
+        file.write(txt_data)
+        file.close()
+
 
         # if float(np.array(psnr_gt_net_list).mean()) > maxx:
         #     save_path = './checkpoints_step2/net_iter{:03d}.pth'.format(epoch+1)
@@ -252,16 +270,16 @@ def train_step2():
     '''
 
 def test_step1():
-    image_dir = '/home/tongtong/project/raw_camera/ISPNetv3/SIDD_crop_bm3d'
+    image_dir = './SIDD_crop_bm3d'
     loader = test_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     loader2 = train_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=2, img_size=512)
     net = torch.nn.DataParallel(net).cuda()
-    net.load_state_dict(torch.load('./checkpoints_step1/net_iter237.pth'))
+    net.load_state_dict(torch.load('./checkpoints_step1/net_iter117.pth'))
     cnt = 0
 
-    if not os.path.exists('./result'):
-        os.mkdir('./result')
+    if not os.path.exists('./result_1'):
+        os.mkdir('./result_1')
     
     # test dataset
     psnr_gt_red = []
@@ -293,12 +311,13 @@ def test_step1():
         plt.subplot(224)
         plt.imshow(out)
 
-        if not os.path.exists('./result/figure_after_step1'):
-            os.mkdir('./result/figure_after_step1')
-        fig.savefig('./result/figure_after_step1/{}.png'.format(cnt))
+        if not os.path.exists('./result_1/figure_after_step1'):
+            os.mkdir('./result_1/figure_after_step1')
+        fig.savefig('./result_1/figure_after_step1/{}.png'.format(cnt))
+        plt.close(fig)
         cnt += 1
 
-    with open('./result/psnr_after_step1_test.txt', 'w') as f:
+    with open('./result_1/psnr_after_step1_test.txt', 'w') as f:
         for idx in range(len(psnr_gt_red)):
             f.write('psnr red vs net: {:.3f} {:.3f}\n'.format(psnr_gt_red[idx], psnr_gt_net[idx]))
         f.write('\navg  red vs net: {:.3f} {:.3f}\n'.format(np.array(psnr_gt_red).mean(), np.array(psnr_gt_net).mean()))
@@ -317,19 +336,19 @@ def test_step1():
         psnr_gt_red_train.append(float(get_psnr(np.array(gt.cpu().detach()), np.array(red.cpu().detach()))))
         psnr_gt_net_train.append(float(get_psnr(np.array(gt.cpu().detach()), np.array(out.cpu().detach()))))
 
-    with open('./result/psnr_after_step1_train.txt', 'w') as f:
+    with open('./result_1/psnr_after_step1_train.txt', 'w') as f:
         for idx in range(len(psnr_gt_red_train)):
             f.write('psnr red vs net: {:.3f} {:.3f}\n'.format(psnr_gt_red_train[idx], psnr_gt_net_train[idx]))
         f.write('\navg  red vs net: {:.3f} {:.3f}\n'.format(np.array(psnr_gt_red_train).mean(), np.array(psnr_gt_net_train).mean()))
 
 
 def test_step2():
-    image_dir = '/home/tongtong/project/raw_camera/ISPNetv3/SIDD_crop_bm3d'
+    image_dir = './SIDD_crop_bm3d'
     loader = test_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=4, img_size=512)
     net = torch.nn.DataParallel(net).cuda()
-    net.load_state_dict(torch.load('./checkpoints_step2/net_iter191.pth'))
-    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(191), 'rb')
+    net.load_state_dict(torch.load('./checkpoints_step2/net_iter030.pth'))
+    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(30), 'rb')
     param_layer = pickle.load(f)
     print(param_layer[0, 0, :, :].mean().cpu().detach().numpy(), end=' ')
     print(param_layer[0, 1, :, :].mean().cpu().detach().numpy(), end=' ')
@@ -340,8 +359,8 @@ def test_step2():
     net.module.load_param_layer(param_layer)
     cnt = 0
 
-    if not os.path.exists('./result'):
-        os.mkdir('./result')
+    if not os.path.exists('./result_2'):
+        os.mkdir('./result_2')
 
     psnr_gt_red = []
     psnr_gt_net = []
@@ -356,7 +375,7 @@ def test_step2():
         psnr_gt_red.append(float(get_psnr(np.array(gt.cpu().detach()), np.array(red.cpu().detach()))))
         psnr_gt_net.append(float(get_psnr(np.array(gt.cpu().detach()), np.array(out.cpu().detach()))))
 
-        '''
+
         # plt
         gt = np.array(gt)[0].transpose(1, 2, 0)
         noisy = np.array(noisy)[0].transpose(1, 2, 0)
@@ -373,13 +392,13 @@ def test_step2():
         plt.subplot(224)
         plt.imshow(out)
 
-        if not os.path.exists('./result/figure_after_step2'):
-            os.mkdir('./result/figure_after_step2')
-        fig.savefig('./result/figure_after_step2/{}.png'.format(cnt))
+        if not os.path.exists('./result_2/figure_after_step2'):
+            os.mkdir('./result_2/figure_after_step2')
+        fig.savefig('./result_2/figure_after_step2/{}.png'.format(cnt))
         cnt += 1
-        '''
 
-    with open('./result/psnr_after_step2.txt', 'w') as f:
+
+    with open('./result_2/psnr_after_step2.txt', 'w') as f:
         for idx in range(len(psnr_gt_red)):
             f.write('psnr red vs net: {:.3f} {:.3f}\n'.format(psnr_gt_red[idx], psnr_gt_net[idx]))
         f.write('\navg red vs net: {:.3f} {:.3f}\n'.format(np.array(psnr_gt_red).mean(), np.array(psnr_gt_net).mean()))
@@ -387,12 +406,15 @@ def test_step2():
     print('avg ori vs net : {:.3f} {:.3f}\n'.format(np.array(psnr_gt_red).mean(), np.array(psnr_gt_net).mean()))
 
 def test_val():
-    image_dir = '/home/tongtong/project/raw_camera/ISPNetv2/test_dataset'
+    # image_dir = '/home/tongtong/project/raw_camera/ISPNetv2/test_dataset'
+    image_dir = './SIDD_crop_bm3d'
     loader = val_dataloader(image_dir, num_threads=16, batch_size=1)
     net = U_Net(3, 3, step_flag=4)
     net = torch.nn.DataParallel(net).cuda()
-    net.load_state_dict(torch.load('./checkpoints_step2/net_iter190.pth'))
-    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(190), 'rb')
+    # net.load_state_dict(torch.load('./checkpoints_step2/net_iter190.pth'))
+    # f = open('./pickles_step2/param_layer{:03d}.pkl'.format(190), 'rb')
+    net.load_state_dict(torch.load('./checkpoints_step2/net_iter030.pth'))
+    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(30), 'rb')
     param_layer = pickle.load(f)
     f.close()
     net.module.load_param_layer(param_layer)
@@ -438,7 +460,7 @@ def test_val():
     f.close()
 
 def get_param():
-    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(110), 'rb')
+    f = open('./pickles_step2/param_layer{:03d}.pkl'.format(30), 'rb')
     param_layer = pickle.load(f).squeeze()
     f.close()
     print(param_layer[0, :, :].mean())
@@ -446,10 +468,16 @@ def get_param():
     print(param_layer[2, :, :].mean())
     print(param_layer[3, :, :].mean())
     print(param_layer[4, :, :].mean())
+    
+    txt_data = "param1: " + str(float(param_layer[0, :, :].mean())) + "; " + "param2: " + str(float(param_layer[1, :, :].mean())) + "; " + "param3: " + str(float(param_layer[2, :, :].mean())) + "; " + "param4: " + str(float(param_layer[3, :, :].mean())) + "; " + "param5: " + str(float(param_layer[4, :, :].mean())) + "; " + "\n"
+    
+    file = open("get_param.txt", "a+")
+    file.write(txt_data)
+    file.close()
 
 if __name__ == '__main__':
-    train_step1()
-    # test_step1()
+    # train_step1()
+    test_step1()
     # train_step2()
     # test_step2()
     # test_val()
