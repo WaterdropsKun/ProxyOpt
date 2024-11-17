@@ -316,12 +316,15 @@ def train_step1():
 
 
 if __name__ == "__main__":
-    # traverse_folder_files("./Data/SIDD_Small_sRGB_Only/Data/")
-    
-    
-    check_data("./SIDD_crop_bm3d", True)
-    check_data("./SIDD_crop_bm3d", False)
-    
-    
-    # train_step1()
+    # 1
+    traverse_folder_files("./data/SIDD_Small_sRGB_Only/Data/")
 
+    # 3
+    # check_data("./SIDD_crop_bm3d", True)
+    # check_data("./SIDD_crop_bm3d", False)
+    # check_data("./SIDD_crop_net", True)
+    # check_data("./SIDD_crop_net", False)
+
+    # 4（可以不管）
+    # train_step1()
+    pass

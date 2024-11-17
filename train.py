@@ -476,9 +476,11 @@ def get_param():
     file.close()
 
 if __name__ == '__main__':
-    # train_step1()
+    train_step1()
     test_step1()
-    # train_step2()
-    # test_step2()
+    train_step2()
+    test_step2()
     # test_val()
     # get_param()
+
+    pass
