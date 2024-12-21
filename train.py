@@ -13,6 +13,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import imageio
+import shutil
 
 random.seed(1)
 
@@ -40,8 +41,16 @@ def train_step1():
 
     maxx = -1
 
+    if(os.path.isdir('./checkpoints_step1')):
+        shutil.rmtree('./checkpoints_step1')
     if not os.path.exists('./checkpoints_step1'):
         os.mkdir('./checkpoints_step1')
+
+    if(os.path.isfile("./train_step1.txt")):
+        os.remove("./train_step1.txt")
+
+    train_loss_min = 9999
+    train_loss_min_epoch = -1
 
     for epoch in range(MAX_EPOCH):
         train_loss = 0.0
@@ -95,12 +104,19 @@ def train_step1():
         viz.line(X=np.array([epoch]), Y=np.array([train_loss]), win='loss', update='append' if epoch > 0 else None)
         viz.line(X=np.array([epoch]), Y=np.array([float(np.array(psnr_gt_net_list_train).mean())]), win='psnr_train', update='append' if epoch > 0 else None)
         viz.line(X=np.array([epoch]), Y=np.array([float(np.array(psnr_gt_net_list).mean())]), win='psnr_test', update='append' if epoch > 0 else None)
-        print('epoch {:03d}, train red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list_train).mean()), float(np.array(psnr_gt_net_list_train).mean())))     
-        print('epoch {:03d}, test  red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
-        
-        txt_data = "epoch: " + str(epoch) + "; " + "loss: " + str(train_loss) + "; " + "psnr_train: " + str(float(np.array(psnr_gt_net_list_train).mean())) + "; " + "psnr_test: " + str(float(np.array(psnr_gt_net_list).mean())) + "; " + "\n"
-        
-        file = open("train_step1.txt", "a+")
+        print('epoch {:04d}, train red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list_train).mean()), float(np.array(psnr_gt_net_list_train).mean())))
+        print('epoch {:04d}, test  red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
+
+        if train_loss < train_loss_min:
+            train_loss_min = train_loss
+            train_loss_min_epoch = epoch
+
+        txt_data = 'epoch {:04d}, loss : {:.6f}, train red vs net : {:.6f} {:.6f}, test  red vs net : {:.6f} {:.6f}, train_loss_min : {:.6f}, train_loss_min_epoch : {:04d}\n'.format(epoch, train_loss,
+                                                                                                                                float(np.array(psnr_gt_red_list_train).mean()), float(np.array(psnr_gt_net_list_train).mean()),
+                                                                                                                                float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean()),
+                                                                                                                                train_loss_min, train_loss_min_epoch)
+
+        file = open("./train_step1.txt", "a+")
         file.write(txt_data)
         file.close()
 
@@ -112,6 +128,7 @@ def train_step1():
         #     torch.save(net.state_dict(), save_path)
         #     maxx = float(np.array(psnr_gt_net_list).mean())
 
+
 def train_step2():
 
     if not os.path.exists('./result'):
@@ -121,15 +138,14 @@ def train_step2():
     LR = 0.002
 
     viz = visdom.Visdom(env='step2')
-    image_dir = './SIDD_crop_bm3d'
+    image_dir = './SIDD_crop_net'
     train_loader = train_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     test_loader = test_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=3, img_size=512)
 
     net = torch.nn.DataParallel(net).cuda()
     # 237 for max_psnr and 459 for min loss
-    net.load_state_dict(torch.load('./checkpoints_step1/net_iter117.pth'))
-    
+    net.load_state_dict(torch.load('./checkpoints_step1_20241215/net_iter3356.pth'))
 
     criterion = torch.nn.MSELoss()
     # optimizer = torch.optim.Adam([net.module.param_layer], LR)
@@ -137,17 +153,24 @@ def train_step2():
 
     maxx = -1
 
+    if(os.path.isdir('./checkpoints_step2')):
+        shutil.rmtree('./checkpoints_step2')
+    if(os.path.isdir('./pickles_step2')):
+        shutil.rmtree('./pickles_step2')
     if not os.path.exists('./checkpoints_step2'):
         os.mkdir('./checkpoints_step2')
     if not os.path.exists('./pickles_step2'):
         os.mkdir('./pickles_step2')
+
+    if(os.path.isfile("./train_step2.txt")):
+        os.remove("./train_step2.txt")
 
     params_list = [[] for i in range(5)]
 
     vis_size = 512
 
     param_layer_ = net.module.return_param_layer()
-    '''
+    # '''
     data = []
     for idx in range(5):
         data.append(np.array(param_layer_[0, idx, :vis_size, :vis_size].detach().cpu())) 
@@ -163,7 +186,10 @@ def train_step2():
         plt.savefig('./result/param{:1d}/{:03d}.png'.format(idx+1, 0))
         plt.close()
         params_list[idx].append(imageio.imread('./result/param{:1d}/{:03d}.png'.format(idx+1, 0)))
-    '''
+    # '''
+
+    train_loss_min = 9999
+    train_loss_min_epoch = -1
 
     for epoch in range(MAX_EPOCH):
         train_loss = 0.0
@@ -206,14 +232,14 @@ def train_step2():
         res = net.module.return_param_value()
         print(res)
 
-        if (epoch+1) % 2 == 0:
+        if (epoch) % 2 == 0:
             LR *= 0.8
-        if (epoch+1) % 30 == 0:
+        if (epoch) % 30 == 0:
             LR = 0.002
 
         # generate gif
         param_layer_ = net.module.return_param_layer()
-        '''
+        # '''
         data = []
         for idx in range(5):
             data.append(np.array(param_layer_[0, idx, :vis_size, :vis_size].detach().cpu())) 
@@ -228,10 +254,10 @@ def train_step2():
             plt.savefig('./result/param{:1d}/{:03d}.png'.format(idx+1, epoch+1))
             plt.close()
             params_list[idx].append(imageio.imread('./result/param{:1d}/{:03d}.png'.format(idx+1, epoch+1)))
-        '''
+        # '''
         viz.line(X=np.array([epoch]), Y=np.array([train_loss]), win='loss', update='append' if epoch > 0 else None)
         viz.line(X=np.array([epoch]), Y=np.array([float(np.array(psnr_gt_net_list).mean())]), win='loss1', update='append' if epoch > 0 else None)
-        print('epoch {:03d}, red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
+        print('epoch {:04d}, red vs net : {:.3f} {:.3f}'.format(epoch, float(np.array(psnr_gt_red_list).mean()), float(np.array(psnr_gt_net_list).mean())))
 
         save_path = './checkpoints_step2/net_iter{:03d}.pth'.format(epoch)
         torch.save(net.state_dict(), save_path)
@@ -248,9 +274,15 @@ def train_step2():
         f.close()
 
 
-        txt_data = "epoch: " + str(epoch) + "; " + "loss: " + str(train_loss) + "; " + "loss1: " + str(float(np.array(psnr_gt_net_list).mean())) + "; " + \
-            "param1: " + str(float(res[0])) + "; " + "param2: " + str(float(res[1])) + "; " + "param3: " + str(float(res[2])) + "; " + "param4: " + str(float(res[3])) + "; " + "param5: " + str(float(res[4])) + "; " + "\n"
-        
+        if train_loss < train_loss_min:
+            train_loss_min = train_loss
+            train_loss_min_epoch = epoch
+
+        txt_data = 'epoch {:04d}, loss : {:.6f}, loss1 : {:.6f}, param1 : {:.6f},  param2 : {:.6f}, param3 : {:.6f}, param4 : {:.6f}, param5 : {:.6f}, train_loss_min : {:.6f}, train_loss_min_epoch : {:04d}\n'.format(
+            epoch, train_loss, float(np.array(psnr_gt_net_list).mean()),
+            float(res[0]), float(res[1]), float(res[2]), float(res[3]), float(res[4]),
+            train_loss_min, train_loss_min_epoch)
+
         file = open("train_step2.txt", "a+")
         file.write(txt_data)
         file.close()
@@ -264,10 +296,11 @@ def train_step2():
         #     pickle.dump(param_layer_value, f)
         #     f.close()
         #     maxx = float(np.array(psnr_gt_net_list).mean())
-    '''
+    # '''
     for idx in range(5):
         imageio.mimsave('./result/param{:1d}/param{:1d}.gif'.format(idx+1, idx+1), params_list[idx], duration=1)
-    '''
+    # '''
+
 
 def test_step1():
     image_dir = './SIDD_crop_bm3d'
@@ -275,12 +308,12 @@ def test_step1():
     loader2 = train_dataloader(image_dir, batch_size=1, num_threads=16, img_size=512)
     net = U_Net(3, 3, step_flag=2, img_size=512)
     net = torch.nn.DataParallel(net).cuda()
-    net.load_state_dict(torch.load('./checkpoints_step1/net_iter117.pth'))
+    net.load_state_dict(torch.load('./checkpoints_step1_20241215/net_iter3356.pth'))
     cnt = 0
 
     if not os.path.exists('./result_1'):
         os.mkdir('./result_1')
-    
+
     # test dataset
     psnr_gt_red = []
     psnr_gt_net = []
@@ -314,7 +347,6 @@ def test_step1():
         if not os.path.exists('./result_1/figure_after_step1'):
             os.mkdir('./result_1/figure_after_step1')
         fig.savefig('./result_1/figure_after_step1/{}.png'.format(cnt))
-        plt.close(fig)
         cnt += 1
 
     with open('./result_1/psnr_after_step1_test.txt', 'w') as f:
@@ -476,10 +508,10 @@ def get_param():
     file.close()
 
 if __name__ == '__main__':
-    train_step1()
-    test_step1()
+    # train_step1()
+    # test_step1()
     train_step2()
-    test_step2()
+    # test_step2()
     # test_val()
     # get_param()
 

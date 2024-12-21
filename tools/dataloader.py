@@ -17,6 +17,17 @@ def normalize(x, a, b, c, d):
     '''
     return (float(x) - a) * (float(d) - c) / (float(b) - a) + float(c)
 
+
+import os
+def delete_file(file_path):
+    if(os.path.isfile(file_path)):
+    
+        os.remove(file_path)
+        
+        #Printing the confirmation message of deletion
+        print("File Deleted successfully", file_path)
+
+
 class MyDataset(Dataset):
     def __init__(self, img_path, data_transforms=None, loader=readImg, is_train=True, img_size=256):
         self.data_transforms = data_transforms
@@ -78,6 +89,8 @@ class MyDataset(Dataset):
         red_name = self.red_img[item]
         param_name = self.param[item]
 
+        print(gt_name)
+
         gt_ = self.loader(gt_name)
         noisy_ = self.loader(noisy_name)
         red_ = self.loader(red_name)
@@ -97,6 +110,7 @@ class MyDataset(Dataset):
         param_.append(0. if lines_[3][:3]=='dct' else 1.)
         param_.append(normalize(float(lines_[4]), 4, 15, 0, 1))
 
+        # DebugMK train
         if self.data_transforms is not None:
             if self.is_train == True:
                 x, y, w, h = transforms.RandomCrop.get_params(gt_, (self.img_size, self.img_size))
@@ -107,6 +121,32 @@ class MyDataset(Dataset):
                 gt_ = self.data_transforms(gt_)
                 noisy_ = self.data_transforms(noisy_)
                 red_ = self.data_transforms(red_)
+
+        # DebugMK check data
+        # try:
+        #     if self.data_transforms is not None:
+        #         if self.is_train == True:
+        #             x, y, w, h = transforms.RandomCrop.get_params(gt_, (self.img_size, self.img_size))
+        #             gt_ = self.data_transforms(gt_.crop([x, y, x+w, y+h]))
+        #             noisy_ = self.data_transforms(noisy_.crop([x, y, x+w, y+h]))
+        #             red_ = self.data_transforms(red_.crop([x, y, x+w, y+h]))
+        #         else:
+        #             gt_ = self.data_transforms(gt_)
+        #             noisy_ = self.data_transforms(noisy_)
+        #             red_ = self.data_transforms(red_)
+        # except Exception as e:
+        #     print("[DebugMK] error", gt_name)
+        #     print(e)
+
+        #     gt_file_name = gt_name.replace("GT", "GT")
+        #     noisy_file_name = gt_name.replace("GT", "NOISY")
+        #     red_file_name = gt_name.replace("GT", "RED")
+        #     param_file_name = gt_name.replace("GT", "PARAM").replace("PNG", "txt")
+
+        #     delete_file(gt_file_name)
+        #     delete_file(noisy_file_name)
+        #     delete_file(red_file_name)
+        #     delete_file(param_file_name)
 
         return gt_, noisy_, red_, torch.tensor(param_)
 

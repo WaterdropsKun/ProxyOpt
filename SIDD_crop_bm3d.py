@@ -28,19 +28,30 @@ from tqdm import tqdm
 
 random.seed(10)
 
+
 default_cff = 4.0
 default_n1 = 8
 default_cspace = 0
 default_wtransform = 0
 default_neighborhood = 8
 
-def generate_dir():
-    file_dir = ['./SIDD_crop_bm3d', './SIDD_crop_bm3d/train', './SIDD_crop_bm3d/test', 
-        './SIDD_crop_bm3d/train/GT', './SIDD_crop_bm3d/train/NOISY', './SIDD_crop_bm3d/train/RED',
-        './SIDD_crop_bm3d/train/PARAM', './SIDD_crop_bm3d/test/GT', './SIDD_crop_bm3d/test/NOISY',
-        './SIDD_crop_bm3d/test/RED', './SIDD_crop_bm3d/test/PARAM']
 
-    file_name = glob.glob('./SIDD_crop/*_GT_SRGB')
+def delete_file(file_path):
+    if(os.path.isfile(file_path)):
+    
+        os.remove(file_path)
+        
+        #Printing the confirmation message of deletion
+        print("File Deleted successfully", file_path)
+
+
+def generate_dir(path_SIDD_crop):
+    file_dir = ['./SIDD_crop_bm3d',
+                './SIDD_crop_bm3d/train', './SIDD_crop_bm3d/test',
+                './SIDD_crop_bm3d/train/GT', './SIDD_crop_bm3d/train/NOISY', './SIDD_crop_bm3d/train/RED', './SIDD_crop_bm3d/train/PARAM',
+                './SIDD_crop_bm3d/test/GT', './SIDD_crop_bm3d/test/NOISY', './SIDD_crop_bm3d/test/RED', './SIDD_crop_bm3d/test/PARAM']
+
+    file_name = glob.glob(path_SIDD_crop + '/*_GT_SRGB')
     order = []
     for elem in file_name:
         order.append(elem.split('/')[-1].split('_')[0])
@@ -83,86 +94,99 @@ def generate_red_img(noisy_img, pred_psd, gt_img):
     return red_img, cff, profile.bs_ht, cspace, profile.transform_2d_wiener_name, profile.bs_wiener, psnr
 
 
-noisy_dir_list = glob.glob('./SIDD_crop/*_NOISY_SRGB')
-gt_dir_list = glob.glob('./SIDD_crop/*_GT_SRGB')
-noisy_dir_list.sort()
-gt_dir_list.sort()
+def process(path_SIDD_crop, date_str, crop_num=1):  # 原始数据路径, 日期, 原始数据路径里面每张图随机crop生成数据的组数
+    noisy_dir_list = glob.glob(path_SIDD_crop + '/*_NOISY_SRGB')
+    gt_dir_list = glob.glob(path_SIDD_crop + '/*_GT_SRGB')
+    noisy_dir_list.sort()
+    gt_dir_list.sort()
 
-generate_dir()
-
-cnt_train = 0
-cnt_test = 0
-
-# for idx in range(1, len(noisy_dir_list)):
-for idx in range(0, len(noisy_dir_list)):
-
-    noisy_img_list = glob.glob(noisy_dir_list[idx] + '/*.PNG')
-    gt_img_list = glob.glob(gt_dir_list[idx] + '/*.PNG')
-    noisy_img_list.sort()
-    gt_img_list.sort()
+    generate_dir(path_SIDD_crop)
 
     train_num = int(0.9*len(noisy_dir_list))
     train_idx = random.sample(range(len(noisy_dir_list)), train_num)
 
-    for jdx in range(len(noisy_img_list)):
-        noisy_img = Image.open(noisy_img_list[jdx])
-        gt_img = Image.open(gt_img_list[jdx])
+    cnt_train = 0
+    cnt_test = 0
+    delete_file('./SIDD_crop_bm3d_train.txt')
+    delete_file('./SIDD_crop_bm3d_test.txt')
+
+    for idx in range(0, len(noisy_dir_list)):
+        noisy_img_list = glob.glob(noisy_dir_list[idx] + '/*.PNG')
+        gt_img_list = glob.glob(gt_dir_list[idx] + '/*.PNG')
+        noisy_img_list.sort()
+        gt_img_list.sort()
+
+        for crop_index in range(crop_num):
+            for jdx in range(len(noisy_img_list)):  # 对应文件夹只有一张图，jdx目前只会是0；即使文件夹多张图，保存的时候按照文件夹名里面order保存，也会覆盖
+                noisy_img = Image.open(noisy_img_list[jdx])
+                gt_img = Image.open(gt_img_list[jdx])
 
 
-        # DebugMK
-        crop_size = 512
-        w, h = noisy_img.size
-        # print(w, h)
-        r = random.randint(0, h-crop_size)
-        c = random.randint(0, w-crop_size)
-        nz_arr = np.array(noisy_img)
-        gt_arr = np.array(gt_img)
+                # DebugMK
+                crop_size = 512
+                w, h = noisy_img.size
+                # print(w, h)
+                r = random.randint(0, h-crop_size)
+                c = random.randint(0, w-crop_size)
+                nz_arr = np.array(noisy_img)
+                gt_arr = np.array(gt_img)
 
-        noisy_crop = nz_arr[r:r+crop_size, c:c+crop_size, :]
-        gt_crop = gt_arr[r:r+crop_size, c:c+crop_size, :]
-
-
-        # Estimate the noise
-        pred_psd = estimate_the_noise(noisy_crop)
-        
-        # five parameter: ['cff', 'n1', 'cspace', 'wtransform', 'neighborhood']
-        # ['cff', 'bs_ht', 'YCbCr'or'opp', 'transform_2d_wiener_name', 'bs_wiener']
-        red_img, cff, n1, cspace, wtransform, neighborhood, psnr = generate_red_img(noisy_crop, pred_psd, gt_crop)
-        
-        noisy_crop_img = Image.fromarray(noisy_crop)
-        gt_crop_img = Image.fromarray(gt_crop)
-
-        order = noisy_img_list[jdx].split('/')[-2].split('_')[0]
-
-        if idx in train_idx:
-            noisy_crop_img.save('./SIDD_crop_bm3d/train/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            gt_crop_img.save('./SIDD_crop_bm3d/train/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            red_img.save('./SIDD_crop_bm3d/train/RED/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            with open('./SIDD_crop_bm3d/train/PARAM/{}_SRGB/{:03d}.txt'.format(order, cnt_train), 'w') as f:
-                f.write('{}\n'.format(cff))
-                f.write('{}\n'.format(n1))
-                f.write('{}\n'.format(cspace))
-                f.write('{}\n'.format(wtransform))
-                f.write('{}\n'.format(neighborhood))
-                f.write('{}\n'.format(psnr))
-            f.close()
-            cnt_train += 1
-
-        else:
-            noisy_crop_img.save('./SIDD_crop_bm3d/test/NOISY/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            gt_crop_img.save('./SIDD_crop_bm3d/test/GT/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            red_img.save('./SIDD_crop_bm3d/test/RED/{}_SRGB/{:03d}.PNG'.format(order, cnt_train))
-            with open('./SIDD_crop_bm3d/test/PARAM/{}_SRGB/{:03d}.txt'.format(order, cnt_train), 'w') as f:
-                f.write('{}\n'.format(cff))
-                f.write('{}\n'.format(n1))
-                f.write('{}\n'.format(cspace))
-                f.write('{}\n'.format(wtransform))
-                f.write('{}\n'.format(neighborhood))
-                f.write('{}\n'.format(psnr))
-            f.close()
-            cnt_test += 1
-
-        print(cnt_train, cnt_test)
+                noisy_crop = nz_arr[r:r+crop_size, c:c+crop_size, :]
+                gt_crop = gt_arr[r:r+crop_size, c:c+crop_size, :]
 
 
-print(cnt_train, cnt_test)
+                # Estimate the noise
+                pred_psd = estimate_the_noise(noisy_crop)
+                
+                # five parameter: ['cff', 'n1', 'cspace', 'wtransform', 'neighborhood']
+                # ['cff', 'bs_ht', 'YCbCr'or'opp', 'transform_2d_wiener_name', 'bs_wiener']
+                red_img, cff, n1, cspace, wtransform, neighborhood, psnr = generate_red_img(noisy_crop, pred_psd, gt_crop)
+                
+                noisy_crop_img = Image.fromarray(noisy_crop)
+                gt_crop_img = Image.fromarray(gt_crop)
+
+                order = noisy_img_list[jdx].split('/')[-2].split('_')[0]
+
+                if idx in train_idx:
+                    noisy_crop_img.save('./SIDD_crop_bm3d/train/NOISY/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    gt_crop_img.save('./SIDD_crop_bm3d/train/GT/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    red_img.save('./SIDD_crop_bm3d/train/RED/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    with open('./SIDD_crop_bm3d/train/PARAM/{}_SRGB/{}_{:03d}.txt'.format(order, date_str, cnt_train), 'w') as f:
+                        f.write('{}\n'.format(cff))
+                        f.write('{}\n'.format(n1))
+                        f.write('{}\n'.format(cspace))
+                        f.write('{}\n'.format(wtransform))
+                        f.write('{}\n'.format(neighborhood))
+                        f.write('{}\n'.format(psnr))
+                    f.close()
+                    cnt_train += 1
+
+                    with open('./SIDD_crop_bm3d_train.txt', 'a+') as f:
+                        f.write('cnt_train={}, idx={}\n'.format(cnt_train, idx))
+                    f.close()
+
+                else:
+                    noisy_crop_img.save('./SIDD_crop_bm3d/test/NOISY/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    gt_crop_img.save('./SIDD_crop_bm3d/test/GT/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    red_img.save('./SIDD_crop_bm3d/test/RED/{}_SRGB/{}_{:03d}.PNG'.format(order, date_str, cnt_train))
+                    with open('./SIDD_crop_bm3d/test/PARAM/{}_SRGB/{}_{:03d}.txt'.format(order, date_str, cnt_train), 'w') as f:
+                        f.write('{}\n'.format(cff))
+                        f.write('{}\n'.format(n1))
+                        f.write('{}\n'.format(cspace))
+                        f.write('{}\n'.format(wtransform))
+                        f.write('{}\n'.format(neighborhood))
+                        f.write('{}\n'.format(psnr))
+                    f.close()
+                    cnt_test += 1
+
+                    with open('./SIDD_crop_bm3d_test.txt', 'a+') as f:
+                        f.write('cnt_test={}, idx={}\n'.format(cnt_test, idx))
+                    f.close()
+
+                print(cnt_train, cnt_test)
+
+
+    print(cnt_train, cnt_test)
+
+    pass
+
